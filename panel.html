@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<title>Floor Panel</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, sans-serif;
+}
+
+/* ================= PANEL ================= */
+#plx-panel {
+  width: 100%;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  box-shadow: 0 6px 18px rgba(0,0,0,.15);
+  overflow: hidden;
+}
+
+/* ================= HEADER ================= */
+.plx-header {
+  background: #1f2937;
+  color: #fff;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.plx-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.plx-toggle {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ================= BODY ================= */
+.plx-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Android portrait fix */
+@media (max-width: 480px) {
+  #plx-panel {
+    height: calc(100dvh - 16px);
+  }
+  .plx-body {
+    height: calc(100dvh - 48px);
+  }
+}
+
+/* ================= COMMON ================= */
+.plx-section {
+  padding: 10px;
+  border-bottom: 1px dashed #ddd;
+}
+
+.plx-section h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.plx-input, .plx-select {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.plx-btn {
+  width: 100%;
+  padding: 7px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+
+.plx-btn.gray { background: #6b7280 }
+.plx-btn.danger { background: #dc2626 }
+
+/* ================= ROOM ================= */
+.plx-room {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px;
+  margin-bottom: 8px;
+  background: #f9fafb;
+}
+
+.plx-object {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+/* ================= COLLAPSE ================= */
+.plx-hidden {
+  display: none !important;
+}
+</style>
+</head>
+
+<body>
+
+<div id="plx-panel">
+  <div class="plx-header">
+    <span class="plx-title">Floor Calculator</span>
+    <button id="plxToggle" class="plx-toggle">✕</button>
+  </div>
+
+  <div class="plx-body" id="plxBody">
+
+    <!-- FLOOR -->
+    <div class="plx-section">
+      <h4>Floor Base</h4>
+      <select id="unit" class="plx-select">
+        <option value="sqm">Square Meter</option>
+        <option value="sqft">Square Feet</option>
+      </select>
+      <input id="floorSize" class="plx-input" type="number" placeholder="Total floor size">
+      <input id="floorRate" class="plx-input" type="number" placeholder="Cost per unit">
+    </div>
+
+    <!-- ROOMS -->
+    <div class="plx-section">
+      <h4>Rooms</h4>
+      <input id="roomName" class="plx-input" placeholder="Room name">
+      <button class="plx-btn" onclick="plxAddRoom()">Add Room</button>
+      <div id="rooms"></div>
+    </div>
+
+    <!-- TOTALS -->
+    <div class="plx-section">
+      <h4>Totals</h4>
+      <div id="totals" style="font-size:13px"></div>
+    </div>
+
+    <!-- JSON -->
+    <div class="plx-section">
+      <input type="file" class="plx-input" accept=".json" onchange="plxImportJSON(event)">
+      <input id="jsonName" class="plx-input" placeholder="Export file name">
+      <button class="plx-btn gray" onclick="plxExportJSON()">Export JSON</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ================= DATA ================= */
+const plxData = {
+  rooms: [],
+  catalog: {
+    Flooring: { Tiles: 50, Marble: 120, Granite: 150 },
+    Electrical: { Switch: 10, Fan: 80, Light: 40 },
+    Furniture: { Bed: 400, Sofa: 600, Table: 150 }
+  }
+};
+
+/* ================= ROOMS ================= */
+function plxAddRoom(){
+  const name = roomName.value || "Room";
+  plxData.rooms.push({
+    name, w1:0, w2:0, h1:0, h2:0, objects:[]
+  });
+  renderRooms();
+}
+
+function renderRooms(){
+  rooms.innerHTML = "";
+  plxData.rooms.forEach((r,i)=>{
+    rooms.innerHTML += `
+    <div class="plx-room">
+      <b>${r.name}</b>
+      <input class="plx-input" placeholder="Width 1" oninput="upd(${i},'w1',this.value)">
+      <input class="plx-input" placeholder="Width 2" oninput="upd(${i},'w2',this.value)">
+      <input class="plx-input" placeholder="Height 1" oninput="upd(${i},'h1',this.value)">
+      <input class="plx-input" placeholder="Height 2" oninput="upd(${i},'h2',this.value)">
+
+      <select class="plx-select" onchange="loadItems(${i},this)">
+        ${Object.keys(plxData.catalog).map(c=>`<option>${c}</option>`).join("")}
+      </select>
+      <select class="plx-select" id="item-${i}"></select>
+
+      <button class="plx-btn gray" onclick="addObj(${i})">Add Object</button>
+      <div id="objs-${i}"></div>
+
+      <button class="plx-btn danger" onclick="delRoom(${i})">Remove Room</button>
+    </div>`;
+    loadItems(i);
+    renderObjs(i);
+  });
+  calc();
+}
+
+function upd(i,k,v){ plxData.rooms[i][k]=+v||0; calc(); }
+function delRoom(i){ plxData.rooms.splice(i,1); renderRooms(); }
+
+/* ================= OBJECTS ================= */
+function loadItems(i,sel){
+  const cat = sel ? sel.value : Object.keys(plxData.catalog)[0];
+  const s = document.getElementById(`item-${i}`);
+  s.innerHTML="";
+  for(const k in plxData.catalog[cat]){
+    s.innerHTML+=`<option value="${plxData.catalog[cat][k]}">${k} (${plxData.catalog[cat][k]})</option>`;
+  }
+}
+
+function addObj(i){
+  const s=document.getElementById(`item-${i}`);
+  plxData.rooms[i].objects.push({
+    name:s.options[s.selectedIndex].text,
+    price:+s.value
+  });
+  renderObjs(i); calc();
+}
+
+function renderObjs(i){
+  const c=document.getElementById(`objs-${i}`);
+  c.innerHTML="";
+  plxData.rooms[i].objects.forEach((o,j)=>{
+    c.innerHTML+=`
+      <div class="plx-object">
+        ${o.name} = ${o.price}
+        <button onclick="plxData.rooms[${i}].objects.splice(${j},1);renderObjs(${i});calc()">✕</button>
+      </div>`;
+  });
+}
+
+/* ================= CALC ================= */
+function calc(){
+  let area=0, objCost=0;
+  plxData.rooms.forEach(r=>{
+    area+=(r.w1+r.w2)*(r.h1+r.h2)/2;
+    objCost+=r.objects.reduce((s,o)=>s+o.price,0);
+  });
+  const floorCost=(+floorSize.value||0)*(+floorRate.value||0);
+  totals.innerHTML=`
+    Area: ${area.toFixed(2)}<br>
+    Floor Cost: ${floorCost.toFixed(2)}<br>
+    Object Cost: ${objCost.toFixed(2)}<br>
+    <b>Total: ${(floorCost+objCost).toFixed(2)}</b>
+  `;
+}
+
+/* ================= JSON ================= */
+function plxExportJSON(){
+  const name=jsonName.value||"data";
+  const blob=new Blob([JSON.stringify(plxData,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=name+".json";
+  a.click();
+}
+
+function plxImportJSON(e){
+  const r=new FileReader();
+  r.onload=()=>{Object.assign(plxData,JSON.parse(r.result));renderRooms();};
+  r.readAsText(e.target.files[0]);
+}
+
+/* ================= TOGGLE (FIXED) ================= */
+const body = document.getElementById("plxBody");
+const toggle = document.getElementById("plxToggle");
+let visible = true;
+
+toggle.onclick = () => {
+  visible = !visible;
+  body.classList.toggle("plx-hidden", !visible);
+  toggle.textContent = visible ? "✕" : "☰";
+};
+</script>
+
+</body>
+</html>

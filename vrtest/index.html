@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Plantrix VR Viewer</title>
+
+  <!-- A-FRAME -->
+  <script src="https://aframe.io/releases/0.8.2/aframe.min.js"></script>
+
+  <!-- ✅ JOYSTICK (REQUIRED) -->
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+      touch-action: none;
+    }
+
+    #uploadPanel {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      z-index: 9999;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: Arial;
+    }
+
+    #uploadBtn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      background: #4a6fa5;
+      color: white;
+    }
+
+    #joystickZone {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 140px;
+      height: 140px;
+      z-index: 9999;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- FILE IMPORT -->
+<div id="uploadPanel">
+  <button id="uploadBtn">📂 Open GLB / GLTF</button>
+  <input type="file" id="glbInput" hidden accept=".glb,.gltf,.gltf.txt">
+</div>
+
+<div id="joystickZone"></div>
+
+<a-scene>
+
+  <!-- ✅ LIGHTS (MANDATORY) -->
+  <a-entity light="type: ambient; intensity: 0.7"></a-entity>
+  <a-entity light="type: directional; intensity: 1"
+            position="100 200 100"></a-entity>
+
+  <!-- ✅ PLAYER -->
+  <a-entity id="player" position="0 110 5">
+    <a-entity
+      camera="fov:100; near:0.1"
+      look-controls="touchEnabled:true; mouseEnabled:true">
+    </a-entity>
+  </a-entity>
+
+  <!-- MODEL -->
+  <a-entity id="modelViewer"></a-entity>
+
+</a-scene>
+
+<script>
+/* ===============================
+   🚫 BLOCK EXPORTS (VIEWER MODE)
+================================ */
+document.addEventListener("click", e => {
+  const a = e.target.closest("a");
+  if (a && a.hasAttribute("download")) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+}, true);
+
+window.saveAs = () => {};
+HTMLAnchorElement.prototype.click = function () {};
+
+/* ===============================
+   📂 IMPORT MODEL
+================================ */
+const uploadBtn = document.getElementById("uploadBtn");
+const glbInput = document.getElementById("glbInput");
+const modelViewer = document.getElementById("modelViewer");
+
+uploadBtn.onclick = () => glbInput.click();
+
+glbInput.addEventListener("change", async e => {
+  let file = e.target.files[0];
+  if (!file) return;
+
+  // Fix .gltf.txt
+  if (file.name.endsWith(".txt") && file.name.includes(".gltf")) {
+    const buf = await file.arrayBuffer();
+    file = new File([buf], file.name.replace(/\.txt$/, ""), {
+      type: "model/gltf+json"
+    });
+  }
+
+  const url = URL.createObjectURL(file);
+  modelViewer.setAttribute("gltf-model", url);
+});
+
+/* ===============================
+   🎮 JOYSTICK MOVEMENT (WORKING)
+================================ */
+const rig = document.getElementById("player");
+const THREE = AFRAME.THREE;
+
+const joystick = nipplejs.create({
+  zone: document.getElementById("joystickZone"),
+  mode: "static",
+  position: { left: "70px", bottom: "70px" },
+  size: 120
+});
+
+let moveX = 0, moveZ = 0;
+
+joystick.on("move", (_, data) => {
+  moveX = -data.vector.x;
+  moveZ = -data.vector.y;
+});
+
+joystick.on("end", () => {
+  moveX = 0;
+  moveZ = 0;
+});
+
+const forward = new THREE.Vector3();
+const right = new THREE.Vector3();
+const up = new THREE.Vector3(0, 1, 0);
+
+function tick() {
+  const pos = rig.object3D.position;
+  const cam = rig.querySelector("[camera]").object3D;
+
+  cam.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+
+  right.crossVectors(forward, up).normalize();
+
+  const speed = 5.2;
+  pos.addScaledVector(forward, moveZ * speed);
+  pos.addScaledVector(right, moveX * speed);
+
+  requestAnimationFrame(tick);
+}
+
+tick();
+</script>
+
+</body>
+</html>

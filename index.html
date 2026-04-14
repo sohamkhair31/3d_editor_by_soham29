@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="manifest" href="/manifest.json">
+<meta charset="UTA-8" 
+name="viewport"
+content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>Architect3D - Floorplan</title>
+<link rel="stylesheet" href="css/jquery-ui.css">
+<link rel="stylesheet" href="css/bootstrap.min.css">
+
+<link href="css/app.css" rel="stylesheet">
+
+<script src="js/lib/jquery-2.1.4.min.js"></script>
+<script src="js/lib/jquery.flip.min.js"></script>
+<script	src="js/lib/dat.gui.min.js"></script>
+<script	src="js/lib/quicksettings.min.js"></script>
+<script src="js/lib/bootstrap.min.js"></script>
+
+<script src="js/bp3djs.js"></script>
+<!-- <script src="js/bp3djs.min.js"></script> -->
+<script src="js/items.js"></script>
+<script src="js/items_gltf.js"></script>
+<script src="js/app.js"></script>
+</head>
+
+<body>
+<style>
+/* ================= BASE ================= */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, sans-serif;
+  background: wheat;
+}
+
+/* ================= GLOBAL OFFSETS ================= */
+:root {
+  --toolbar-offset: 96px; /* desktop floating toolbar */
+}
+
+/* ================= PANEL CONTAINER ================= */
+#plx-panel-container {
+  position: fixed;
+  top: calc(80px + var(--toolbar-offset));
+  bottom: 8px;
+  left: 8px;
+
+  width: 200px;
+  max-width: 92vw;
+
+  z-index: 9999;
+  transition: width 0.25s ease;
+  transform: none; /* safety vs canvas */
+}
+
+/* COLLAPSED STATE */
+#plx-panel-container.plx-collapsed {
+  width: 56px;
+  height: 50px;
+  bottom: auto;
+}
+
+/* ================= PANEL ================= */
+#plx-panel {
+  width: 100%;
+  height: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+
+  overflow: hidden;
+}
+
+/* ================= HEADER ================= */
+.plx-header {
+  background: #1f2937;
+  color: #ffffff;
+
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  flex-shrink: 0;
+}
+
+.plx-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.plx-toggle {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* ================= BODY ================= */
+.plx-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ================= COLLAPSED VISUALS ================= */
+#plx-panel-container.plx-collapsed .plx-body {
+  display: none;
+}
+
+#plx-panel-container.plx-collapsed .plx-header {
+  justify-content: center;
+}
+
+#plx-panel-container.plx-collapsed .plx-title {
+  display: none;
+}
+
+/* ================= CONTENT ================= */
+.plx-section {
+  padding: 10px;
+  border-bottom: 1px dashed #ddd;
+}
+
+.plx-section:last-child {
+  border-bottom: none;
+}
+
+/* unified heading */
+.plx-section h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ================= INPUTS ================= */
+.plx-input,
+.plx-select {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+/* ================= BUTTONS (BASE – DO NOT OVERRIDE) ================= */
+.plx-btn {
+  width: 100%;
+  padding: 7px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.plx-btn.gray {
+  background: #6b7280;
+}
+
+.plx-btn.danger {
+  background: #dc2626;
+}
+
+/* ================= ROOM ================= */
+.plx-room {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px;
+  margin-bottom: 8px;
+  background: #f9fafb;
+}
+
+.plx-object {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+/* ================= EXPORT / IMPORT (SCOPED) ================= */
+.plx-section.data-section {
+  border-top: 1px dashed rgba(0,0,0,0.15);
+  padding-top: 12px;
+}
+
+/* only export/import buttons */
+.plx-section.data-section .plx-btn {
+  padding: 10px 14px;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: #2d2d2d;
+  font-size: 14px;
+  font-weight: 500;
+  transition: transform 0.15s ease,
+              box-shadow 0 0.15s ease,
+              background 0.15s ease;
+}
+
+.plx-section.data-section .plx-btn:hover {
+  background: #1f1f1f;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+  transform: translateY(-1px);
+}
+
+.plx-section.data-section .plx-btn:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+/* import label button */
+.plx-section.data-section label.plx-btn {
+  display: block;
+  text-align: center;
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 600px) {
+  :root {
+    --toolbar-offset: 88px;
+  }
+
+  #plx-panel-container {
+    top: calc(56px + var(--toolbar-offset));
+    bottom: 4px;
+    left: 4px;
+    width: 30vw;
+  }
+
+  #plx-panel-container.plx-collapsed {
+    width: 48px;
+  }
+
+  .plx-section.data-section .plx-btn {
+    font-size: 13px;
+    padding: 9px 12px;
+  }
+}
+
+/* ================= LANDSCAPE ================= */
+@media (orientation: landscape) {
+  #plx-panel-container {
+    top: calc(40px + var(--toolbar-offset));
+  }
+}
+</style>
+
+
+
+<!-- PLX PANEL CONTAINER -->
+<div id="plx-panel-container">
+
+  <div id="plx-panel">
+    <div class="plx-header">
+      <span class="plx-title">Floor Calculator</span>
+      <button id="plxToggle" class="plx-toggle">✕</button>
+    </div>
+
+    <div class="plx-body">
+
+      <!-- FLOOR RATE -->
+      <div class="plx-section">
+        <h4>Floor Rate</h4>
+        <input
+          id="floorRate"
+          class="plx-input"
+          type="number"
+          placeholder="Cost per unit"
+        >
+      </div>
+
+      <!-- ROOMS -->
+      <div class="plx-section">
+        <h4>Rooms</h4>
+        <input
+          id="roomName"
+          class="plx-input"
+          placeholder="Room name"
+        >
+        <button class="plx-btn" onclick="plxAddRoom()">Add Room</button>
+        <div id="rooms"></div>
+      </div>
+
+      <!-- TOTALS -->
+      <div class="plx-section">
+        <h4>Totals</h4>
+        <div id="totals"></div>
+      </div>
+
+      <!-- EXPORT / IMPORT -->
+      <div class="plx-section data-section">
+        <h4>Data</h4>
+
+        <button class="plx-btn" onclick="plxExportData()">
+          Export JSON
+        </button>
+
+        <label class="plx-btn" style="display:inline-block; cursor:pointer;">
+          Import JSON
+          <input
+            type="file"
+            accept="application/json"
+            hidden
+            onchange="plxImportData(event)"
+          >
+        </label>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!--Other LOGIC -->  
+	<div id='interfaces' class='card'>
+		<div id="floorplanner" class='front'>
+			<div id="floorplanner-controls">
+				<a href="#"
+					class="btn btn-default btn-sm glyphicon glyphicon-floppy-disk"
+					id="new2d" title="New Layout"></a>
+				<a href="#"	class="btn btn-default btn-sm glyphicon glyphicon-floppy-save" id="saveFile2d" title="Save Layout"></a>
+				<a class="btn btn-sm btn-default btn-file glyphicon glyphicon-floppy-open">
+					<input type="file" class="hidden-input" id="loadFile2d">
+				</a>
+				<button id="move" class="btn btn-sm btn-default" title="Move Walls">
+					<span class="glyphicon glyphicon-move"></span>
+				</button>
+				<button id="draw" class="btn btn-sm btn-default"
+					title="Draw New Walls">
+					<span class="glyphicon glyphicon-pencil"></span>
+				</button>
+				<button id="delete" class="btn btn-sm btn-default"
+					title="Delete Walls">
+					<span class="glyphicon glyphicon-remove"></span>
+				</button>
+
+        <button id="exportGLTF2D"
+        class="btn btn-sm btn-default"
+        title="Export GLTF (from 2D)">
+  <span class="glyphicon glyphicon-export"></span>
+</button>
+
+			</div>
+			<div class="btn-hint ">Press the "Esc" key to stop drawing
+				walls</div>
+			<canvas id="floorplanner-canvas"></canvas>
+		</div>
+
+		<div id="viewer" class='back'>
+			<div id="main-controls">
+				<a href="#" class="btn btn-default btn-sm glyphicon glyphicon-floppy-disk" id="new" title="New Layout"></a>
+				<a href="#"	class="btn btn-default btn-sm glyphicon glyphicon-floppy-save" id="saveFile" title="Save Layout"></a>
+				<a class="btn btn-sm btn-default btn-file glyphicon glyphicon-floppy-open">
+					<input type="file" class="hidden-input" id="loadFile">
+				</a>
+				<a href="#" class="btn btn-default btn-sm glyphicon glyphicon-asterisk"	id="saveMesh" title="Save Scene as a mesh"></a>
+				<a href="#" class="btn btn-default btn-sm glyphicon glyphicon-export"	id="saveGLTF" title="Save Scene as a GLTF"></a>
+			</div>
+		</div>
+	</div>
+	<div id='interface-controls'>
+		<button id="showFloorPlan" class="btn btn-sm btn-default active"
+			title="Edit 2D floorplan">
+			<span class="glyphicon glyphicon-move"></span> Floor Plan
+		</button>
+		<button id="showDesign" class="btn btn-sm btn-default"
+			title="Edit 3D floorplan">
+			<span class="glyphicon glyphicon-move"></span> 3D
+		</button>
+		<div class="btn-group-vertical" id='viewcontrols' >
+			<div class="btn btn-sm btn-default">
+		            <!-- <a class="btn btn-default bottom" href="#" id="leftview" title="Show side view (left)">
+		              <span class="glyphicon glyphicon glyphicon-object-align-left"></span>
+		            </a>
+		            <span class="btn-group-vertical">
+		              <a class="btn btn-default" href="#" id="topview" title="Show top view">
+		                <span class="glyphicon glyphicon glyphicon-object-align-horizontal"></span>
+		              </a> -->
+		              <!-- <a class="btn btn-default" href="#" id="isometryview" title="Show 3d view">
+		                <span class="glyphicon glyphicon glyphicon-inbox"></span>
+		              </a>
+		              <a class="btn btn-default" href="#" id="frontview" title="Show front view">
+		                <span class="glyphicon glyphicon glyphicon-object-align-vertical"></span>
+		              </a> -->
+		            <!-- </span>
+		            <a class="btn btn-default bottom" href="#" id="rightview" title="Show side view (right)" >
+		              <span class="glyphicon glyphicon glyphicon-object-align-right"></span>
+		            </a> -->
+	        </div>
+	        <button id="showSwitchCameraMode" class="btn btn-sm btn-default" title="Switch Camera ortho/perspective">
+				<span class="glyphicon glyphicon-camera"></span>
+			</button>
+			<!-- <button id="showSwitchWireframeMode" class="btn btn-sm btn-default" title="Switch wireframe mode">
+				<span class="glyphicon glyphicon-pencil"></span>
+			</button> -->
+        </div>
+		<button id="showAddItems" class="btn btn-sm btn-default" data-toggle="modal" data-target="#add-items-modal" title="Add/Remove items in 3D">
+			<span class="glyphicon glyphicon-plus"></span>
+		</button>
+<!-- 		<button id="showFirstPerson" class="btn btn-sm btn-default" title="Walk through"> -->
+<!-- 			<span class="glyphicon glyphicon-eye-open"></span> -->
+<!-- 		</button> -->
+	</div>
+
+	<!-- Add Items -->
+	<div class="modal fade" id="add-items-modal" role = "dialog">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+		          <button type="button" class="close" data-dismiss="modal">&times;</button>
+		          <h4 class="modal-title">Furniture Inventory</h4>
+		        </div>
+		        <div class="modal-body">
+		          <div id="add-items" class="panel-group">
+
+					<div id="floor-items" class="panel panel-default">
+						<div id="floor-items-header" class="panel-heading">
+							<h4 class="panel-title">
+							<a data-toggle="collapse" data-parent="#add-items" href="#floor-items-body">Floor Items</a>
+						</h4>
+					</div>
+						<div id="floor-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="floor-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+
+
+					<div id="roof-items" class="panel panel-default">
+						<div id="roof-items-header" class="panel-heading">
+							<h4 class="panel-title">
+								<a data-toggle="collapse" data-parent="#add-items" href="#roof-items-body">Ceiling Items</a>
+							</h4>
+						</div>
+						<div id="roof-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="roof-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+
+
+					<div id="wall-items" class="panel panel-default">
+						<div id="wall-items-header" class="panel-heading"><h4 class="panel-title"><a data-toggle="collapse" data-parent="#add-items" href="#wall-items-body">Wall Items</a></h4></div>
+						<div id="wall-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="wall-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+					<div id="in-wall-items" class="panel panel-default">
+						<div id="in-wall-items-header" class="panel-heading"><h4 class="panel-title"><a data-toggle="collapse" data-parent="#add-items" href="#in-wall-items-body">In Wall Items</a></h4></div>
+						<div id="in-wall-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="in-wall-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+					<div id="in-wall-floor-items" class="panel panel-default">
+						<div id="in-wall-floor-items-header" class="panel-heading"><h4 class="panel-title"><a data-toggle="collapse" data-parent="#add-items" href="#in-wall-floor-items-body">In Wall Floor Items</a></h4></div>
+						<div id="in-wall-floor-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="in-wall-floor-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+					<div id="on-floor-items" class="panel panel-default">
+						<div id="on-floor-items-header" class="panel-heading"><h4 class="panel-title"><a data-toggle="collapse" data-parent="#add-items" href="#on-floor-items-body">On Floor Items</a></h4></div>
+						<div id="on-floor-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="on-floor-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+					<div id="wall-floor-items" class="panel panel-default">
+						<div id="wall-floor-items-header" class="panel-heading"><h4 class="panel-title"><a data-toggle="collapse" data-parent="#add-items" href="#wall-floor-items-body">Wall-Floor Items</a></h4></div>
+						<div id="wall-floor-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="wall-floor-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+					<div id="item-items" class="panel panel-default">
+						<div id="item-items-header" class="panel-heading">
+							<h4 class="panel-title">
+								<a data-toggle="collapse" data-parent="#add-items" href="#item-items-body">Anywhere Items</a>
+							</h4>
+						</div>
+						<div id="item-items-body" class="panel-collapse collapse inventory-content">
+							<div class="row panel-body" id="item-items-wrapper">
+								<!-- Items added here by items.js -->
+							</div>
+						</div>
+					</div>
+				</div>
+		        </div>
+		        <div class="modal-footer">
+		          <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+		        </div>
+			</div>
+		</div>
+	</div>
+	<script>
+window.addEventListener("message", (e) => {
+  if (e.data?.type === "plx-resize") {
+    const iframe = document.getElementById("plx-panel-frame");
+    if (iframe) {
+      iframe.style.height = e.data.height + "px";
+    }
+  }
+});
+</script>
+
+
+///Script for right panel
+<script>
+/* ================= DATA ================= */
+const plxData = {
+  rooms: [],
+  catalog: { "floor_items": { "Chair": 900, "Red Chair": 950, "Blue Chair": 950, "Dresser - Dark Wood": 5500, "Dresser - White": 5200, "Bedside table - Shale": 1800, "Bedside table - White": 1700, "Wardrobe - White": 12000, "Full Bed": 15000, "Bookshelf": 4200, "Sectional - Olive": 28000, "Sofa - Grey": 22000, "Wooden Trunk": 3500, "Floor Lamp": 2200, "Coffee Table - Wood": 3800, "Side Table": 1600, "Dining Table": 14000, "Dining table": 14000, "Simple Cabinet": 4500, "Duck": 300, "Bathtub": 18000, "Bedbunk": 22000, "Beddouble": 17000, "Bedsingle": 9000, "Bench": 2800, "Benchcushion": 3500, "Benchcushionlow": 3200, "Bookcaseopen": 4800, "Bookcaseopenlow": 4200, "Cabinetbed": 16000, "Cabinetbeddrawer": 17500, "Cabinetbeddrawertable": 18500, "Cabinettelevision": 6200, "Cabinettelevisiondoors": 7200, "Chaircushion": 1300, "Chairdesk": 2500, "Chairmoderncushion": 3200, "Chairmodernframecushion": 3600, "Chairrounded": 2100, "Coatrackstanding": 2400, "Desk": 6500, "Kitchenfridge": 18000, "Kitchenfridgebuiltin": 28000, "Kitchenfridgelarge": 26000, "Kitchenfridgesmall": 14000, "Kitchensink": 4500, "Kitchenstove": 16000, "Kitchenstoveelectric": 19000, "Lamproundfloor": 2300, "Lampsquarefloor": 2400, "Loungechair": 7000, "Loungechairrelax": 8500, "Loungedesignchair": 12000, "Loungedesignsofa": 32000, "Loungesofa": 24000, "Loungesofalong": 29000, "Loungesofaottoman": 26000, "Plantsmall1": 400, "Plantsmall2": 450, "Plantsmall3": 500, "Pottedplant": 900, "Rugdoormat": 700, "Rugrectangle": 2200, "Ruground": 2000, "Rugrounded": 2100, "Rugsquare": 1900, "Sidetable": 1600, "Sidetabledrawers": 2800, "Speaker": 3500, "Speakersmall": 1800, "Stairs": 12000, "Stairscorner": 14000, "Stairsopen": 16000, "Stairsopensingle": 10000, "Stoolbar": 1800, "Stoolbarsquare": 2000, "Table": 5000, "Tablecloth": 400, "Tablecoffee": 3600, "Tablecoffeeglass": 5200, "Tablecoffeeglasssquare": 5500, "Tablecoffeesquare": 3800, "Tablecross": 6000, "Tablecrosscloth": 6500, "Tableglass": 7000, "Tableround": 5800, "Toilet": 6000, "Toiletsquare": 7500, "Trashcan": 600, "Washer": 22000, "Washerdryerstacked": 42000 }, "ceiling_items": { "Ceilingfan": 3200, "Chandelier": 8500, "Lampsquareceiling": 2800 }, "wall_items": { "NYC Poster": 600, "Bathroomcabinet": 4800, "Bathroommirror": 2200, "Bear": 900, "Coatrack": 1800, "Computerscreen": 8500, "Deskcorner": 7200, "Dryer": 20000, "Kitchencabinetdrawer": 4200, "Kitchencabinetupper": 5500, "Kitchencabinetuppercorner": 6800, "Kitchencabinetupperdouble": 7500, "Kitchencabinetupperlow": 5200, "Lampwall": 1600, "Paneling": 9500, "Televisionantenna": 1200, "Televisionmodern": 18000, "Televisionvintage": 14000 }, "in_wall_items": { "Window": 4200, "Doorway": 6800, "Doorwayfront": 8500, "Doorwayopen": 7200, "Walldoorway": 7800, "Walldoorwaywide": 9800, "Wallwindow": 4500, "Wallwindowslide": 6200 }, "in_wall_floor_items": { "Closed Door": 5200, "Open Door": 4800 }, "on_floor_items": { "Blue Rug": 2300 }, "wall_floor_items": { "Media Console - White": 9500, "Media Console - Black": 9800, "Simplecabinet": 4200, "Bathroomcabinetdrawer": 5200, "Bathroomsink": 6500, "Bathroomsinksquare": 7200, "Bookcaseclosed": 6800, "Bookcasecloseddoors": 8200, "Bookcaseclosedwide": 9000, "Kitchenbar": 12000, "Kitchenbarend": 6500, "Kitchencabinet": 5800, "Kitchencabinetcornerinner": 7200, "Kitchencabinetcornerround": 7600, "Loungedesignsofacorner": 36000, "Loungesofacorner": 32000, "Shower": 14000, "Showerround": 16000 }, "anywhere_items": { "Books": 300, "Cardboardboxclosed": 200, "Cardboardboxopen": 150, "Computerkeyboard": 800, "Computermouse": 500, "Floorcorner": 1000, "Floorcornerround": 1200, "Floorfull": 2000, "Floorhalf": 1200, "Hoodlarge": 8500, "Hoodmodern": 12000, "Kitchenblender": 3200, "Kitchencoffeemachine": 6800, "Kitchenmicrowave": 7500, "Lamproundtable": 1600, "Lampsquaretable": 1700, "Laptop": 42000, "Pillow": 400, "Pillowblue": 450, "Pillowbluelong": 600, "Pillowlong": 550, "Radio": 1800, "Toaster": 2200, "Wall": 1500, "Wallcorner": 1800, "Wallcornerrond": 1900, "Wallhalf": 1000 } }
+};
+
+/* ================= ROOMS ================= */
+function plxAddRoom(){
+  plxData.rooms.push({
+    name: roomName.value || "Room",
+    w1:0, w2:0,
+    h1:0, h2:0,
+    objects:[]
+  });
+  renderRooms();
+}
+
+function renderRooms(){
+  rooms.innerHTML = "";
+  plxData.rooms.forEach((r,i)=>{
+    rooms.innerHTML += `
+      <div class="plx-room">
+        <b>${r.name}</b>
+
+        <input class="plx-input" placeholder="Width 1"
+          oninput="upd(${i},'w1',this.value)">
+        <input class="plx-input" placeholder="Width 2"
+          oninput="upd(${i},'w2',this.value)">
+
+        <input class="plx-input" placeholder="Height 1"
+          oninput="upd(${i},'h1',this.value)">
+        <input class="plx-input" placeholder="Height 2"
+          oninput="upd(${i},'h2',this.value)">
+
+        <select class="plx-select" onchange="loadItems(${i},this)">
+          ${Object.keys(plxData.catalog).map(c=>`<option>${c}</option>`).join("")}
+        </select>
+
+        <select class="plx-select" id="item-${i}"></select>
+        <button class="plx-btn gray" onclick="addObj(${i})">Add Object</button>
+
+        <div id="objs-${i}"></div>
+
+        <div id="roomCost-${i}" class="plx-room-cost" style="font-size:12px;margin-top:6px">
+          <i>Enter all dimensions</i>
+        </div>
+
+        <button class="plx-btn danger" onclick="delRoom(${i})">Remove Room</button>
+      </div>
+    `;
+    loadItems(i);
+    renderObjs(i);
+  });
+  calc();
+}
+
+function upd(i,k,v){
+  plxData.rooms[i][k] = +v || 0;
+  calc();
+}
+
+function delRoom(i){
+  plxData.rooms.splice(i,1);
+  renderRooms();
+}
+
+/* ================= OBJECTS ================= */
+function loadItems(i,sel){
+  const cat = sel ? sel.value : Object.keys(plxData.catalog)[0];
+  const s = document.getElementById(`item-${i}`);
+  s.innerHTML = "";
+  for(const k in plxData.catalog[cat]){
+    s.innerHTML += `<option value="${plxData.catalog[cat][k]}">${k}</option>`;
+  }
+}
+
+function addObj(i){
+  const s = document.getElementById(`item-${i}`);
+  plxData.rooms[i].objects.push({
+    name: s.options[s.selectedIndex].text,
+    price: +s.value
+  });
+  renderObjs(i);
+  calc();
+}
+
+function renderObjs(i){
+  const c = document.getElementById(`objs-${i}`);
+  c.innerHTML = "";
+  plxData.rooms[i].objects.forEach((o,j)=>{
+    c.innerHTML += `
+      <div class="plx-object">
+        ${o.name} = ${o.price}
+        <button onclick="plxData.rooms[${i}].objects.splice(${j},1);renderObjs(${i});calc()">✕</button>
+      </div>
+    `;
+  });
+}
+
+/* ================= CALCULATION ================= */
+function calc(){
+  let totalArea = 0;
+  let totalFloorCost = 0;
+  let totalObjectCost = 0;
+
+  const rate = +floorRate.value || 0;
+
+  plxData.rooms.forEach((r,i)=>{
+    let area = 0;
+    let floorCost = 0;
+
+    if(r.w1>0 && r.w2>0 && r.h1>0 && r.h2>0){
+      const avgW = (r.w1 + r.w2) / 2;
+      const avgH = (r.h1 + r.h2) / 2;
+
+      area = avgW * avgH;
+      floorCost = area * rate;
+
+      totalArea += area;
+      totalFloorCost += floorCost;
+    }
+
+    const objCost = r.objects.reduce((s,o)=>s+o.price,0);
+    totalObjectCost += objCost;
+
+    const div = document.getElementById(`roomCost-${i}`);
+    if(div){
+      div.innerHTML = `
+        Avg Width: ${((r.w1+r.w2)/2).toFixed(2)}<br>
+        Avg Height: ${((r.h1+r.h2)/2).toFixed(2)}<br>
+        Area: ${area.toFixed(2)}<br>
+        Floor Cost: ${floorCost.toFixed(2)}<br>
+        Object Cost: ${objCost.toFixed(2)}<br>
+        <b>Room Total: ${(floorCost + objCost).toFixed(2)}</b>
+      `;
+    }
+  });
+
+  totals.innerHTML = `
+    Total Area: ${totalArea.toFixed(2)}<br>
+    Total Floor Cost: ${totalFloorCost.toFixed(2)}<br>
+    Total Object Cost: ${totalObjectCost.toFixed(2)}<br>
+    <b>Grand Total: ${(totalFloorCost + totalObjectCost).toFixed(2)}</b>
+  `;
+}
+
+/* ================= JSON EXPORT / IMPORT ================= */
+function plxExportData() {
+  const data = {
+    floorRate: document.getElementById("floorRate")?.value || 0,
+    rooms: window.plxRooms || []
+  };
+
+  const blob = new Blob(
+    [JSON.stringify(data, null, 2)],
+    { type: "application/json" }
+  );
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "floor-data.json";
+  a.click();
+
+  URL.revokeObjectURL(a.href);
+}
+
+function plxImportData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+
+      // Restore floor rate
+      if (data.floorRate !== undefined) {
+        document.getElementById("floorRate").value = data.floorRate;
+      }
+
+      // Restore rooms
+      if (Array.isArray(data.rooms)) {
+        window.plxRooms = data.rooms;
+        plxRenderRooms?.();
+      }
+
+    } catch (err) {
+      alert("Invalid JSON file");
+    }
+  };
+
+  reader.readAsText(file);
+}
+
+
+/* ================= TOGGLE ================= */
+const panelContainer = document.getElementById("plx-panel-container");
+const toggle = document.getElementById("plxToggle");
+let open = true;
+
+toggle.onclick = ()=>{
+  open = !open;
+  panelContainer.classList.toggle("plx-collapsed", !open);
+  toggle.textContent = open ? "✕" : "☰";
+};
+</script>
+
+<script>
+document.getElementById("exportGLTF2D").addEventListener("click", function (e) {
+  e.preventDefault();
+
+  const gltfBtn = document.getElementById("saveGLTF");
+  if (gltfBtn) {
+    gltfBtn.click(); // 🔥 reuse existing logic
+  } else {
+    console.warn("saveGLTF button not found");
+  }
+});
+</script>
+
+</body>
+</html>
